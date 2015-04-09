@@ -3,15 +3,16 @@ import System.Environment (getArgs)
 import Text.Regex.Posix
 import Data.List
 
+matches :: String -> String -> [String]
+matches pattern text = (tail . concat) (text =~ pattern :: [[String]])
+
 extractCoords :: String -> [String]
-extractCoords line = (tail . concat) (line =~ "pll=(.+)\\|(.+)" :: [[String]])
+extractCoords line = matches "pll=(.+)\\|(.+)" line
 
 toGeodesic :: String -> [Geo.Geodesic]
-toGeodesic s = zipWith (Geo.Geodesic) lat long
-    where   lat     = map (\x -> read ((head . tail . concat) x) :: Double) comma
-            long    = map (\x -> read ((last . concat) x) :: Double) comma
-            comma   = map (\x -> x =~ "(.+),(.+)" :: [[String]]) coords
-            coords  = map (head . extractCoords) $ lines s
+toGeodesic s = map (uncurry Geo.Geodesic . tuple . map (\x -> read x :: Double)) coords
+    where   coords       = map (matches "(.+),(.+)" . head . extractCoords) $ lines s
+            tuple [x, y] = (x, y)
 
 triangles :: [Geo.Geodesic] -> [Geo.Triangle]
 triangles list = map toTri (triples list)
@@ -20,11 +21,10 @@ triangles list = map toTri (triples list)
                 | length list < 3 = []
                 | otherwise       = (setsof3 list) ++ (triples . tail $ list)
             setsof3 (x : xs)
-                | length xs < 2 = []
-                | otherwise     = (map (\l -> x : l) (setsof2 xs)) ++ (setsof3 (x : tail xs))
+                | length xs < 2   = []
+                | otherwise       = (map (\l -> x : l) (setsof2 xs)) ++ (setsof3 (x : tail xs))
             setsof2 (x : xs)
-                | length xs < 1 = [[]]
-                | length xs == 1= [[x, last xs]]
+                | length xs == 1  = [[x, last xs]]
                 | otherwise = [x, head xs] : (setsof2 (x : tail xs))
 
 process :: String -> IO ()
